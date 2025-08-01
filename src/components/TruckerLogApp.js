@@ -1,0 +1,592 @@
+import React, { useState } from 'react';
+import { MapPin, Truck, Clock, FileText, Route, Calendar, Fuel } from 'lucide-react';
+
+import api from '../services/api';
+
+function TruckerLogApp() {
+  const [tripData, setTripData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('form');
+
+  const handleTripResult = (data) => {
+    setTripData(data);
+    setActiveTab('results');
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800">
+      {/* Header */}
+      <div className="bg-black/20 backdrop-blur-lg border-b border-white/10">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-gradient-to-r from-blue-500 to-cyan-400 p-3 rounded-xl">
+                <Truck className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">TruckerLog Pro</h1>
+                <p className="text-blue-200">Professional Daily Log Management</p>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setActiveTab('form')}
+                className={`px-4 py-2 rounded-lg transition-all ${
+                  activeTab === 'form' 
+                    ? 'bg-blue-500 text-white shadow-lg' 
+                    : 'bg-white/10 text-white/70 hover:bg-white/20'
+                }`}
+              >
+                Plan Trip
+              </button>
+              {tripData && (
+                <button
+                  onClick={() => setActiveTab('results')}
+                  className={`px-4 py-2 rounded-lg transition-all ${
+                    activeTab === 'results' 
+                      ? 'bg-blue-500 text-white shadow-lg' 
+                      : 'bg-white/10 text-white/70 hover:bg-white/20'
+                  }`}
+                >
+                  View Results
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-8">
+        {activeTab === 'form' && (
+          <TripForm onResult={handleTripResult} loading={loading} setLoading={setLoading} />
+        )}
+        
+        {activeTab === 'results' && tripData && (
+          <TripResults data={tripData} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TripForm({ onResult, loading, setLoading }) {
+  const [form, setForm] = useState({
+    current_location: "",
+    pickup_location: "",
+    dropoff_location: "",
+    current_cycle_hours: ""
+  });
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async () => {
+    if (!form.current_location || !form.pickup_location || !form.dropoff_location || !form.current_cycle_hours) {
+      alert("Please fill in all fields");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const res = await api.post("/trips/", form);
+      onResult(res.data);
+    } catch (err) {
+      console.error("API Error:", err);
+      alert("Error: Check your backend is running and API is correct.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 shadow-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-8">
+          <h2 className="text-3xl font-bold text-white mb-2">Plan Your Route</h2>
+          <p className="text-blue-100">Enter trip details to generate compliant daily logs</p>
+        </div>
+        
+        <div className="p-8">
+          <div className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              <FormField
+                icon={<MapPin className="h-5 w-5" />}
+                label="Current Location"
+                name="current_location"
+                value={form.current_location}
+                onChange={handleChange}
+                placeholder="e.g., San Francisco, CA"
+              />
+              
+              <FormField
+                icon={<Route className="h-5 w-5" />}
+                label="Pickup Location"
+                name="pickup_location"
+                value={form.pickup_location}
+                onChange={handleChange}
+                placeholder="e.g., Denver, CO"
+              />
+              
+              <FormField
+                icon={<MapPin className="h-5 w-5" />}
+                label="Drop-off Location"
+                name="dropoff_location"
+                value={form.dropoff_location}
+                onChange={handleChange}
+                placeholder="e.g., New York, NY"
+              />
+              
+              <FormField
+                icon={<Clock className="h-5 w-5" />}
+                label="Current Cycle Hours"
+                name="current_cycle_hours"
+                type="number"
+                step="0.1"
+                value={form.current_cycle_hours}
+                onChange={handleChange}
+                placeholder="32.5"
+              />
+            </div>
+            
+            <div className="pt-4">
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white font-semibold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <span>Planning Route...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center space-x-2">
+                    <Route className="h-5 w-5" />
+                    <span>Generate Trip Plan</span>
+                  </div>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormField({ icon, label, name, type = "text", value, onChange, placeholder, step }) {
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center space-x-2 text-white font-medium">
+        <span className="text-blue-300">{icon}</span>
+        <span>{label}</span>
+      </label>
+      <input
+        name={name}
+        type={type}
+        step={step}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="w-full p-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
+        required
+      />
+    </div>
+  );
+}
+
+function TripResults({ data }) {
+  const [activeView, setActiveView] = useState('overview');
+
+  return (
+    <div className="space-y-8">
+      {/* Trip Overview */}
+      <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 shadow-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-green-600 to-emerald-500 p-8">
+          <h2 className="text-3xl font-bold text-white mb-2">Trip Overview</h2>
+          <p className="text-green-100">Route: {data.from} → {data.to}</p>
+        </div>
+        
+        <div className="p-8">
+          <div className="grid md:grid-cols-4 gap-6">
+            <StatCard
+              icon={<Route className="h-8 w-8" />}
+              label="Total Distance"
+              value={`${data.total_distance_miles.toLocaleString()} mi`}
+              color="blue"
+            />
+            <StatCard
+              icon={<Calendar className="h-8 w-8" />}
+              label="Estimated Days"
+              value={data.estimated_days}
+              color="green"
+            />
+            <StatCard
+              icon={<Fuel className="h-8 w-8" />}
+              label="Fuel Stops"
+              value={data.fuel_stops}
+              color="orange"
+            />
+            <StatCard
+              icon={<Clock className="h-8 w-8" />}
+              label="Total Driving"
+              value={`${data.log_sheets.reduce((sum, log) => sum + log.driving_hours, 0).toFixed(1)}h`}
+              color="purple"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* View Toggle */}
+      <div className="flex justify-center space-x-4">
+        <button
+          onClick={() => setActiveView('overview')}
+          className={`px-6 py-3 rounded-xl font-medium transition-all ${
+            activeView === 'overview'
+              ? 'bg-blue-500 text-white shadow-lg'
+              : 'bg-white/10 text-white/70 hover:bg-white/20'
+          }`}
+        >
+          Log Overview
+        </button>
+        <button
+          onClick={() => setActiveView('detailed')}
+          className={`px-6 py-3 rounded-xl font-medium transition-all ${
+            activeView === 'detailed'
+              ? 'bg-blue-500 text-white shadow-lg'
+              : 'bg-white/10 text-white/70 hover:bg-white/20'
+          }`}
+        >
+          Detailed Log Sheets
+        </button>
+      </div>
+
+      {activeView === 'overview' && <LogOverview logs={data.log_sheets} />}
+      {activeView === 'detailed' && <DetailedLogSheets logs={data.log_sheets} tripData={data} />}
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value, color }) {
+  const colorClasses = {
+    blue: 'from-blue-500 to-blue-600',
+    green: 'from-green-500 to-green-600',
+    orange: 'from-orange-500 to-orange-600',
+    purple: 'from-purple-500 to-purple-600'
+  };
+
+  return (
+    <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all">
+      <div className={`bg-gradient-to-r ${colorClasses[color]} w-12 h-12 rounded-xl flex items-center justify-center text-white mb-4`}>
+        {icon}
+      </div>
+      <h3 className="text-white/70 text-sm font-medium mb-1">{label}</h3>
+      <p className="text-white text-2xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+function LogOverview({ logs }) {
+  return (
+    <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 shadow-2xl overflow-hidden">
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-500 p-8">
+        <h2 className="text-3xl font-bold text-white mb-2">Daily Log Overview</h2>
+        <p className="text-purple-100">Visual breakdown of duty status by day</p>
+      </div>
+      
+      <div className="p-8 space-y-6">
+        {logs.map((log, i) => (
+          <LogBar key={i} log={log} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LogBar({ log }) {
+  const total = 24;
+  const drivingPercent = (log.driving_hours / total) * 100;
+  const dutyPercent = (log.other_duty / total) * 100;
+  const restPercent = (log.rest / total) * 100;
+  const offPercent = ((total - log.driving_hours - log.other_duty - log.rest) / total) * 100;
+
+  return (
+    <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl font-bold text-white">Day {log.day}</h3>
+        <div className="text-white/70 text-sm">24 Hour Period</div>
+      </div>
+      
+      <div className="h-8 bg-white/10 rounded-full overflow-hidden flex mb-4">
+        {log.driving_hours > 0 && (
+          <div 
+            className="bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center text-white text-xs font-medium"
+            style={{ width: `${drivingPercent}%` }}
+          >
+            {log.driving_hours > 2 && `${log.driving_hours}h`}
+          </div>
+        )}
+        {log.other_duty > 0 && (
+          <div 
+            className="bg-gradient-to-r from-yellow-500 to-yellow-600 flex items-center justify-center text-white text-xs font-medium"
+            style={{ width: `${dutyPercent}%` }}
+          >
+            {log.other_duty > 1 && `${log.other_duty}h`}
+          </div>
+        )}
+        {log.rest > 0 && (
+          <div 
+            className="bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs font-medium"
+            style={{ width: `${restPercent}%` }}
+          >
+            {log.rest > 2 && `${log.rest}h`}
+          </div>
+        )}
+        {offPercent > 0 && (
+          <div 
+            className="bg-gradient-to-r from-gray-500 to-gray-600 flex items-center justify-center text-white text-xs font-medium"
+            style={{ width: `${offPercent}%` }}
+          >
+            {offPercent > 8 && 'OFF'}
+          </div>
+        )}
+      </div>
+      
+      <div className="grid grid-cols-4 gap-4 text-sm">
+        <div className="text-center">
+          <div className="w-4 h-4 bg-gradient-to-r from-red-500 to-red-600 rounded mx-auto mb-1"></div>
+          <div className="text-white/70">Driving</div>
+          <div className="text-white font-medium">{log.driving_hours}h</div>
+        </div>
+        <div className="text-center">
+          <div className="w-4 h-4 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded mx-auto mb-1"></div>
+          <div className="text-white/70">On Duty</div>
+          <div className="text-white font-medium">{log.other_duty}h</div>
+        </div>
+        <div className="text-center">
+          <div className="w-4 h-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded mx-auto mb-1"></div>
+          <div className="text-white/70">Rest</div>
+          <div className="text-white font-medium">{log.rest}h</div>
+        </div>
+        <div className="text-center">
+          <div className="w-4 h-4 bg-gradient-to-r from-gray-500 to-gray-600 rounded mx-auto mb-1"></div>
+          <div className="text-white/70">Off Duty</div>
+          <div className="text-white font-medium">{(24 - log.driving_hours - log.other_duty - log.rest).toFixed(1)}h</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailedLogSheets({ logs, tripData }) {
+  return (
+    <div className="space-y-8">
+      {logs.map((log, index) => (
+        <DetailedLogSheet 
+          key={index} 
+          log={log} 
+          tripData={tripData}
+          isLast={index === logs.length - 1}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DetailedLogSheet({ log, tripData, isLast }) {
+  const currentDate = new Date();
+  const logDate = new Date(currentDate.getTime() + (log.day - 1) * 24 * 60 * 60 * 1000);
+  
+  return (
+    <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border-2 border-gray-200">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-gray-800 to-gray-900 text-white p-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <h2 className="text-2xl font-bold mb-2">DRIVER'S DAILY LOG</h2>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-gray-300">Date:</span> {logDate.toLocaleDateString()}
+              </div>
+              <div>
+                <span className="text-gray-300">Day:</span> {log.day}
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-gray-300 mb-1">Original - File at home terminal</div>
+            <div className="text-xs text-gray-300">Duplicate - Driver retains for seven consecutive days</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Driver Info Section */}
+      <div className="p-6 bg-gray-50">
+        <div className="grid grid-cols-3 gap-6">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">From:</label>
+            <div className="border-b border-gray-300 pb-1 min-h-[24px] text-sm">
+              {log.day === 1 ? tripData.from : 'En route'}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">To:</label>
+            <div className="border-b border-gray-300 pb-1 min-h-[24px] text-sm">
+              {isLast ? tripData.to : 'En route'}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Total Miles Today:</label>
+            <div className="border-b border-gray-300 pb-1 min-h-[24px] text-sm">
+              {Math.round(tripData.total_distance_miles / tripData.estimated_days)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Graph Section */}
+      <div className="p-6">
+        <div className="mb-4">
+          <h3 className="font-bold text-gray-800 mb-2">24-Hour Duty Status Graph</h3>
+          <TimeGraph log={log} />
+        </div>
+
+        {/* Duty Status Legend */}
+        <div className="grid grid-cols-4 gap-4 mb-6 text-xs">
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-red-500 rounded"></div>
+            <span>1. Off Duty</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+            <span>2. Sleeper</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-green-500 rounded"></div>
+            <span>3. Driving</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-blue-500 rounded"></div>
+            <span>4. On Duty</span>
+          </div>
+        </div>
+
+        {/* Remarks Section */}
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-2">Remarks</label>
+            <div className="border border-gray-300 rounded p-2 min-h-[60px] bg-gray-50">
+              <div className="text-sm text-gray-600">
+                Day {log.day} - {log.driving_hours}h driving, {log.other_duty}h other duty, {log.rest}h rest
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-2">Shipping Documents</label>
+            <div className="border border-gray-300 rounded p-2 min-h-[40px] bg-gray-50"></div>
+          </div>
+        </div>
+
+        {/* Bottom Section */}
+        <div className="mt-6 grid grid-cols-2 gap-6">
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">Driver & Commodity</h4>
+            <div className="text-xs text-gray-600 space-y-1">
+              <div>Driver's signature certifies that the above information is true and correct</div>
+            </div>
+          </div>
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">24 Hour Period</h4>
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <div className="text-gray-600">From: 12:00 AM</div>
+                <div className="text-gray-600">To: 11:59 PM</div>
+              </div>
+              <div>
+                <div className="text-gray-600">Consecutive:</div>
+                <div className="text-gray-600">{log.driving_hours + log.other_duty}h</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TimeGraph({ log }) {
+  // Create hourly breakdown
+  const hours = [];
+  let currentHour = 0;
+  
+  // Add driving hours (status 3)
+  for (let i = 0; i < log.driving_hours; i++) {
+    hours[currentHour + i] = 3;
+  }
+  currentHour += log.driving_hours;
+  
+  // Add other duty hours (status 4)
+  for (let i = 0; i < log.other_duty; i++) {
+    hours[currentHour + i] = 4;
+  }
+  currentHour += log.other_duty;
+  
+  // Add rest hours (status 2 - sleeper)
+  for (let i = 0; i < log.rest; i++) {
+    hours[currentHour + i] = 2;
+  }
+  currentHour += log.rest;
+  
+  // Fill remaining with off duty (status 1)
+  for (let i = currentHour; i < 24; i++) {
+    hours[i] = 1;
+  }
+
+  const getBarColor = (status) => {
+    switch (status) {
+      case 1: return 'bg-red-500'; // Off Duty
+      case 2: return 'bg-yellow-500'; // Sleeper
+      case 3: return 'bg-green-500'; // Driving
+      case 4: return 'bg-blue-500'; // On Duty
+      default: return 'bg-gray-300';
+    }
+  };
+
+  return (
+    <div className="bg-white border border-gray-300 rounded-lg p-4">
+      {/* Time markers */}
+      <div className="flex justify-between text-xs text-gray-500 mb-2">
+        {Array.from({ length: 25 }, (_, i) => (
+          <div key={i} className="text-center" style={{ width: '4%' }}>
+            {i % 4 === 0 && i < 24 ? i : ''}
+          </div>
+        ))}
+      </div>
+      
+      {/* Graph bars */}
+      <div className="flex space-x-0.5 mb-2">
+        {hours.map((status, i) => (
+          <div
+            key={i}
+            className={`h-16 ${getBarColor(status)} border-r border-gray-200`}
+            style={{ width: '4.16%' }}
+            title={`Hour ${i}: ${['', 'Off Duty', 'Sleeper', 'Driving', 'On Duty'][status]}`}
+          />
+        ))}
+      </div>
+      
+      {/* Hour numbers */}
+      <div className="flex justify-between text-xs text-gray-400">
+        {Array.from({ length: 24 }, (_, i) => (
+          <div key={i} className="text-center" style={{ width: '4.16%' }}>
+            {i % 2 === 0 ? i : ''}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default TruckerLogApp;
