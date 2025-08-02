@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
-import { MapPin, Truck, Clock, FileText, Route, Calendar, Fuel } from 'lucide-react';
 
+
+
+
+import React, { useState, useEffect, useRef } from 'react';
+import { MapPin, Truck, Clock, FileText, Route, Calendar, Fuel, Navigation, Map as MapIcon } from 'lucide-react';
+
+// Mock API service (replace with your actual API)
 import api from '../services/api';
+
 
 function TruckerLogApp() {
   const [tripData, setTripData] = useState(null);
@@ -40,16 +46,28 @@ function TruckerLogApp() {
                 Plan Trip
               </button>
               {tripData && (
-                <button
-                  onClick={() => setActiveTab('results')}
-                  className={`px-4 py-2 rounded-lg transition-all ${
-                    activeTab === 'results' 
-                      ? 'bg-blue-500 text-white shadow-lg' 
-                      : 'bg-white/10 text-white/70 hover:bg-white/20'
-                  }`}
-                >
-                  View Results
-                </button>
+                <>
+                  <button
+                    onClick={() => setActiveTab('map')}
+                    className={`px-4 py-2 rounded-lg transition-all ${
+                      activeTab === 'map' 
+                        ? 'bg-blue-500 text-white shadow-lg' 
+                        : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    }`}
+                  >
+                    Route Map
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('results')}
+                    className={`px-4 py-2 rounded-lg transition-all ${
+                      activeTab === 'results' 
+                        ? 'bg-blue-500 text-white shadow-lg' 
+                        : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    }`}
+                  >
+                    View Results
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -61,9 +79,296 @@ function TruckerLogApp() {
           <TripForm onResult={handleTripResult} loading={loading} setLoading={setLoading} />
         )}
         
+        {activeTab === 'map' && tripData && (
+          <RouteMap data={tripData} />
+        )}
+        
         {activeTab === 'results' && tripData && (
           <TripResults data={tripData} />
         )}
+      </div>
+    </div>
+  );
+}
+
+function RouteMap({ data }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+
+  useEffect(() => {
+    // Load Leaflet CSS and JS
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';
+    script.onload = initializeMap;
+    document.head.appendChild(script);
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+      }
+    };
+  }, []);
+
+  const initializeMap = () => {
+    if (!window.L || !mapRef.current || mapInstanceRef.current) return;
+
+    const coords = data.coordinates;
+    
+    // Initialize map
+    const map = window.L.map(mapRef.current, {
+      zoomControl: true,
+      scrollWheelZoom: true
+    });
+
+    // Add tile layer (OpenStreetMap)
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 18
+    }).addTo(map);
+
+    // Custom icons
+    const currentLocationIcon = window.L.divIcon({
+      html: `<div style="background: #3b82f6; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>`,
+      className: 'custom-div-icon',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+
+    const pickupIcon = window.L.divIcon({
+      html: `<div style="background: #10b981; border: 3px solid white; border-radius: 50%; width: 24px; height: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;"><div style="color: white; font-size: 12px; font-weight: bold;">P</div></div>`,
+      className: 'custom-div-icon',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+
+    const dropoffIcon = window.L.divIcon({
+      html: `<div style="background: #ef4444; border: 3px solid white; border-radius: 50%; width: 24px; height: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;"><div style="color: white; font-size: 12px; font-weight: bold;">D</div></div>`,
+      className: 'custom-div-icon',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+
+    const fuelIcon = window.L.divIcon({
+      html: `<div style="background: #f59e0b; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;"><div style="color: white; font-size: 10px; font-weight: bold;">F</div></div>`,
+      className: 'custom-div-icon',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+
+    // Add markers
+    const currentMarker = window.L.marker(coords.current_location, { icon: currentLocationIcon })
+      .bindPopup(`
+        <div style="font-family: sans-serif;">
+          <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 14px;">Current Location</h3>
+          <p style="margin: 0; color: #6b7280; font-size: 12px;">Starting point of journey</p>
+        </div>
+      `)
+      .addTo(map);
+
+    const pickupMarker = window.L.marker(coords.pickup_location, { icon: pickupIcon })
+      .bindPopup(`
+        <div style="font-family: sans-serif;">
+          <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 14px;">Pickup Location</h3>
+          <p style="margin: 0; color: #6b7280; font-size: 12px;">${data.from}</p>
+        </div>
+      `)
+      .addTo(map);
+
+    const dropoffMarker = window.L.marker(coords.dropoff_location, { icon: dropoffIcon })
+      .bindPopup(`
+        <div style="font-family: sans-serif;">
+          <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 14px;">Drop-off Location</h3>
+          <p style="margin: 0; color: #6b7280; font-size: 12px;">${data.to}</p>
+        </div>
+      `)
+      .addTo(map);
+
+    // Add fuel stops
+    coords.fuel_stop_coords.forEach((fuelCoord, index) => {
+      window.L.marker(fuelCoord, { icon: fuelIcon })
+        .bindPopup(`
+          <div style="font-family: sans-serif;">
+            <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 14px;">Fuel Stop ${index + 1}</h3>
+            <p style="margin: 0; color: #6b7280; font-size: 12px;">Mandatory fuel and rest stop</p>
+          </div>
+        `)
+        .addTo(map);
+    });
+
+    // Create route line
+    const routePoints = [
+      coords.current_location,
+      coords.pickup_location,
+      ...coords.fuel_stop_coords,
+      coords.dropoff_location
+    ];
+
+    const polyline = window.L.polyline(routePoints, {
+      color: '#3b82f6',
+      weight: 4,
+      opacity: 0.8,
+      dashArray: '10, 5'
+    }).addTo(map);
+
+    // Fit map to show all points
+    const group = new window.L.featureGroup([
+      currentMarker,
+      pickupMarker,
+      dropoffMarker,
+      ...coords.fuel_stop_coords.map(coord => window.L.marker(coord)),
+      polyline
+    ]);
+    
+    map.fitBounds(group.getBounds().pad(0.1));
+
+    mapInstanceRef.current = map;
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Map Container */}
+      <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 shadow-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-500 p-8">
+          <div className="flex items-center space-x-3">
+            <MapIcon className="h-8 w-8 text-white" />
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-2">Route Overview</h2>
+              <p className="text-blue-100">Interactive map showing your complete journey</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="p-8">
+          <div 
+            ref={mapRef} 
+            className="w-full h-96 rounded-2xl border-4 border-white/20 shadow-lg"
+            style={{ minHeight: '400px' }}
+          />
+        </div>
+      </div>
+
+      {/* Route Information */}
+      <div className="grid lg:grid-cols-2 gap-8">
+        {/* Trip Stats */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 shadow-2xl p-8">
+          <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+            <Navigation className="h-6 w-6 mr-3 text-blue-400" />
+            Journey Details
+          </h3>
+          
+          <div className="space-y-4">
+            <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl">
+              <span className="text-white/70">Total Distance</span>
+              <span className="text-white font-bold text-lg">{data.total_distance_miles.toLocaleString()} miles</span>
+            </div>
+            
+            <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl">
+              <span className="text-white/70">Estimated Duration</span>
+              <span className="text-white font-bold text-lg">{data.estimated_days} days</span>
+            </div>
+            
+            <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl">
+              <span className="text-white/70">Fuel Stops Required</span>
+              <span className="text-white font-bold text-lg">{data.fuel_stops}</span>
+            </div>
+            
+            <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl">
+              <span className="text-white/70">Total Driving Hours</span>
+              <span className="text-white font-bold text-lg">
+                {data.log_sheets.reduce((sum, log) => sum + log.driving_hours, 0)}h
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Stop Information */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 shadow-2xl p-8">
+          <h3 className="text-2xl font-bold text-white mb-6 flex items-center">
+            <MapPin className="h-6 w-6 mr-3 text-green-400" />
+            Key Stops
+          </h3>
+          
+          <div className="space-y-4">
+            <div className="p-4 bg-white/5 rounded-xl">
+              <div className="flex items-center space-x-3 mb-2">
+                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                <span className="text-white font-medium">Current Location</span>
+              </div>
+              <p className="text-white/70 text-sm">Starting point of journey</p>
+            </div>
+            
+            <div className="p-4 bg-white/5 rounded-xl">
+              <div className="flex items-center space-x-3 mb-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span className="text-white font-medium">Pickup</span>
+              </div>
+              <p className="text-white/70 text-sm">{data.from}</p>
+            </div>
+            
+            {data.coordinates.fuel_stop_coords.map((_, index) => (
+              <div key={index} className="p-4 bg-white/5 rounded-xl">
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                  <span className="text-white font-medium">Fuel Stop {index + 1}</span>
+                </div>
+                <p className="text-white/70 text-sm">Mandatory rest and refuel</p>
+              </div>
+            ))}
+            
+            <div className="p-4 bg-white/5 rounded-xl">
+              <div className="flex items-center space-x-3 mb-2">
+                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                <span className="text-white font-medium">Drop-off</span>
+              </div>
+              <p className="text-white/70 text-sm">{data.to}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 shadow-2xl p-8">
+        <h3 className="text-xl font-bold text-white mb-6">Map Legend</h3>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-5 h-5 bg-blue-500 rounded-full border-2 border-white"></div>
+            <span className="text-white text-sm">Current Location</span>
+          </div>
+          
+          <div className="flex items-center space-x-3">
+            <div className="w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+              <span className="text-white text-xs font-bold">P</span>
+            </div>
+            <span className="text-white text-sm">Pickup Point</span>
+          </div>
+          
+          <div className="flex items-center space-x-3">
+            <div className="w-5 h-5 bg-amber-500 rounded-full border-2 border-white flex items-center justify-center">
+              <span className="text-white text-xs font-bold">F</span>
+            </div>
+            <span className="text-white text-sm">Fuel Stop</span>
+          </div>
+          
+          <div className="flex items-center space-x-3">
+            <div className="w-6 h-6 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
+              <span className="text-white text-xs font-bold">D</span>
+            </div>
+            <span className="text-white text-sm">Drop-off Point</span>
+          </div>
+        </div>
+        
+        <div className="mt-4 pt-4 border-t border-white/20">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-1 bg-blue-500" style={{ borderStyle: 'dashed', borderWidth: '2px 0' }}></div>
+            <span className="text-white text-sm">Planned Route</span>
+          </div>
+        </div>
       </div>
     </div>
   );
