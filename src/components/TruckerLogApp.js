@@ -12,6 +12,10 @@ import {
   Map as MapIcon,
 } from "lucide-react";
 import api from "../services/api";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+
+
 
 function TruckerLogApp() {
   const [tripData, setTripData] = useState(null);
@@ -564,8 +568,243 @@ function FormField({
   );
 }
 
+
 function TripResults({ data }) {
   const [activeView, setActiveView] = useState("overview");
+
+  function downloadPDF() {
+    try {
+      // More detailed validation
+      if (!data) {
+        throw new Error('No data provided');
+      }
+      
+      if (!data.log_sheets || !Array.isArray(data.log_sheets)) {
+        throw new Error('Invalid log sheets data');
+      }
+
+      if (data.log_sheets.length === 0) {
+        throw new Error('No log entries to export');
+      }
+
+      // Check if jsPDF is available
+      if (typeof jsPDF === 'undefined') {
+        throw new Error('PDF library not loaded. Please refresh the page and try again.');
+      }
+
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      let yPosition = 30;
+
+      // Header
+      doc.setFontSize(20);
+      doc.setFont(undefined, 'bold');
+      doc.text("Trucker Hours of Service Log", pageWidth / 2, yPosition, { align: 'center' });
+      
+      // Add current date
+      yPosition += 15;
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      const currentDate = new Date().toLocaleDateString();
+      doc.text(`Generated: ${currentDate}`, pageWidth / 2, yPosition, { align: 'center' });
+
+      yPosition += 20;
+
+      // Trip information
+      if (data.from && data.to) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text("Trip Information", margin, yPosition);
+        yPosition += 10;
+        
+        doc.setFont(undefined, 'normal');
+        doc.text(`Route: ${String(data.from)} → ${String(data.to)}`, margin, yPosition);
+        yPosition += 8;
+        
+        if (data.total_distance_miles) {
+          doc.text(`Total Distance: ${String(data.total_distance_miles.toLocaleString())} miles`, margin, yPosition);
+          yPosition += 8;
+        }
+        
+        if (data.estimated_days) {
+          doc.text(`Estimated Days: ${String(data.estimated_days)}`, margin, yPosition);
+          yPosition += 8;
+        }
+        
+        yPosition += 10;
+      }
+
+      // Summary section if available
+      if (data.driver_name || data.truck_number) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text("Driver Information", margin, yPosition);
+        yPosition += 10;
+        
+        doc.setFont(undefined, 'normal');
+        if (data.driver_name) {
+          doc.text(`Driver: ${String(data.driver_name)}`, margin, yPosition);
+          yPosition += 8;
+        }
+        if (data.truck_number) {
+          doc.text(`Truck: ${String(data.truck_number)}`, margin, yPosition);
+          yPosition += 8;
+        }
+        yPosition += 10;
+      }
+
+      // Table headers
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text("Daily Log Entries", margin, yPosition);
+      yPosition += 15;
+
+      // Table header row
+      doc.setFontSize(10);
+      const headers = ['Day', 'Driving Hours', 'Other Duty Hours', 'Rest Hours', 'Total Hours'];
+      const colWidths = [30, 35, 35, 30, 30];
+      let xPosition = margin;
+
+      // Draw header background
+      doc.setFillColor(240, 240, 240);
+      doc.rect(margin, yPosition - 5, pageWidth - 2 * margin, 12, 'F');
+
+      headers.forEach((header, index) => {
+        doc.text(header, xPosition + colWidths[index] / 2, yPosition + 3, { align: 'center' });
+        xPosition += colWidths[index];
+      });
+
+      yPosition += 15;
+
+      // Table data
+      doc.setFont(undefined, 'normal');
+      data.log_sheets.forEach((log, index) => {
+        // Check if we need a new page
+        if (yPosition > pageHeight - 40) {
+          doc.addPage();
+          yPosition = 30;
+        }
+
+        xPosition = margin;
+        const drivingHours = parseFloat(log.driving_hours) || 0;
+        const otherDuty = parseFloat(log.other_duty) || 0;
+        const restHours = parseFloat(log.rest) || 0;
+        const totalHours = drivingHours + otherDuty + restHours;
+
+        // Alternate row background
+        if (index % 2 === 0) {
+          doc.setFillColor(250, 250, 250);
+          doc.rect(margin, yPosition - 3, pageWidth - 2 * margin, 10, 'F');
+        }
+
+        const rowData = [
+          String(log.day || `Day ${index + 1}`),
+          `${drivingHours}h`,
+          `${otherDuty}h`,
+          `${restHours}h`,
+          `${totalHours.toFixed(1)}h`
+        ];
+
+        rowData.forEach((cellData, cellIndex) => {
+          doc.text(cellData, xPosition + colWidths[cellIndex] / 2, yPosition, { align: 'center' });
+          xPosition += colWidths[cellIndex];
+        });
+
+        yPosition += 12;
+      });
+
+      // Summary totals
+      if (data.log_sheets.length > 0) {
+        yPosition += 10;
+        doc.setFont(undefined, 'bold');
+        doc.text("Weekly Totals:", margin, yPosition);
+        yPosition += 10;
+
+        const totals = data.log_sheets.reduce((acc, log) => {
+          acc.driving += parseFloat(log.driving_hours) || 0;
+          acc.duty += parseFloat(log.other_duty) || 0;
+          acc.rest += parseFloat(log.rest) || 0;
+          return acc;
+        }, { driving: 0, duty: 0, rest: 0 });
+
+        doc.setFont(undefined, 'normal');
+        doc.text(`Total Driving: ${totals.driving.toFixed(1)} hours`, margin + 10, yPosition);
+        yPosition += 8;
+        doc.text(`Total Other Duty: ${totals.duty.toFixed(1)} hours`, margin + 10, yPosition);
+        yPosition += 8;
+        doc.text(`Total Rest: ${totals.rest.toFixed(1)} hours`, margin + 10, yPosition);
+        yPosition += 15;
+      }
+
+      // HOS Warning section
+      if (data.hos_warning) {
+        // Check if we need a new page for warning
+        if (yPosition > pageHeight - 60) {
+          doc.addPage();
+          yPosition = 30;
+        }
+
+        // Warning box
+        doc.setDrawColor(255, 0, 0);
+        doc.setFillColor(255, 240, 240);
+        doc.rect(margin, yPosition - 5, pageWidth - 2 * margin, 25, 'FD');
+
+        doc.setTextColor(255, 0, 0);
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text("⚠ HOS COMPLIANCE WARNING", margin + 5, yPosition + 5);
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        // Split long warning text if needed
+        const warningText = String(data.hos_warning);
+        const warningLines = doc.splitTextToSize(warningText, pageWidth - 2 * margin - 10);
+        doc.text(warningLines, margin + 5, yPosition + 15);
+      }
+
+      // Footer
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(8);
+      doc.text(`Page 1 of 1 - Generated on ${new Date().toLocaleString()}`, 
+               pageWidth / 2, pageHeight - 10, { align: 'center' });
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const routeInfo = data.from && data.to ? `_${data.from.replace(/\s+/g, '')}_to_${data.to.replace(/\s+/g, '')}` : '';
+      const filename = `trucker_log${routeInfo}_${timestamp}.pdf`;
+      
+      doc.save(filename);
+
+      // Show success message
+      console.log(`PDF saved as: ${filename}`);
+      
+      // Optional: Show user-friendly success notification
+      if (typeof alert !== 'undefined') {
+        alert(`PDF exported successfully as: ${filename}`);
+      }
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      
+      // More specific error messages
+      let errorMessage = 'Failed to generate PDF. ';
+      if (error.message.includes('jsPDF')) {
+        errorMessage += 'PDF library not loaded properly.';
+      } else if (error.message.includes('log sheets')) {
+        errorMessage += 'Invalid log data format.';
+      } else if (error.message.includes('No data')) {
+        errorMessage += 'No trip data available to export.';
+      } else {
+        errorMessage += error.message || 'Please check your data and try again.';
+      }
+      
+      if (typeof alert !== 'undefined') {
+        alert(errorMessage);
+      }
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -577,6 +816,12 @@ function TripResults({ data }) {
             Route: {data.from} → {data.to}
           </p>
         </div>
+        {data.hos_warning && (
+          <div className="bg-red-500/90 text-white p-4 rounded-xl shadow-md mb-6">
+            <h3 className="font-bold text-lg mb-1">⚠️ HOS Violation</h3>
+            <p>{data.hos_warning}</p>
+          </div>
+        )}
 
         <div className="p-8">
           <div className="grid md:grid-cols-4 gap-6">
@@ -633,6 +878,15 @@ function TripResults({ data }) {
           Detailed Log Sheets
         </button>
       </div>
+      
+      <div className="flex justify-center">
+        <button
+          onClick={downloadPDF}
+          className="px-6 py-3 bg-red-500 text-white rounded-xl shadow-lg hover:bg-red-600 transition-all font-medium"
+        >
+          📄 Export Log Sheet as PDF
+        </button>
+      </div>
 
       {activeView === "overview" && <LogOverview logs={data.log_sheets} />}
       {activeView === "detailed" && (
@@ -641,7 +895,6 @@ function TripResults({ data }) {
     </div>
   );
 }
-
 function StatCard({ icon, label, value, color }) {
   const colorClasses = {
     blue: "from-blue-500 to-blue-600",
