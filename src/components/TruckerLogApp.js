@@ -212,19 +212,20 @@ function RouteMap({ data }) {
 
     // Add fuel stops
     coords.fuel_stop_coords.forEach((fuelCoord, index) => {
-      window.L.marker(fuelCoord, { icon: fuelIcon })
-        .bindPopup(
-          `
-          <div style="font-family: sans-serif;">
-            <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 14px;">Fuel Stop ${
-              index + 1
-            }</h3>
-            <p style="margin: 0; color: #6b7280; font-size: 12px;">Mandatory fuel and rest stop</p>
-          </div>
-        `
-        )
-        .addTo(map);
-    });
+  window.L.marker(fuelCoord, { icon: fuelIcon })
+    .bindPopup(`
+      <div style="font-family: sans-serif;">
+        <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 14px;">Fuel Stop ${index + 1}</h3>
+        <p style="margin: 0; color: #6b7280; font-size: 12px;">
+          Mandatory 30-minute rest + refuel
+        </p>
+        <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 12px;">
+          FMCSA break: off-duty before 8 hours of driving
+        </p>
+      </div>
+    `)
+    .addTo(map);
+});
 
     // Create route line
     let routePolyline = null;
@@ -344,7 +345,7 @@ function RouteMap({ data }) {
                 <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                 <span className="text-white font-medium">Pickup</span>
               </div>
-              <p className="text-white/70 text-sm">{data.from}</p>
+              <p className="text-white/70 text-sm">{data.pickup}</p>
             </div>
 
             {data.coordinates.fuel_stop_coords.map((_, index) => (
